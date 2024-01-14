@@ -1,0 +1,1 @@
+@python.exe bot.py
