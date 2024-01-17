@@ -22,6 +22,8 @@ INIT, DATE, KEYWORDS, SEARCH = range(4)
 
 # Функция для команды /start
 def start(update, context):
+    context.user_data.clear()
+
     reply_keyboard = [['Date', 'Keywords', 'Both', 'Cancel']]
     update.message.reply_text(
         'Hi! I am your article search bot. '
@@ -36,7 +38,7 @@ def init(update, context):
     user_choice = update.message.text
     context.user_data['choice'] = user_choice
     if user_choice == 'Cancel':
-        update.message.reply_text('Search cancelled.', reply_markup=ReplyKeyboardRemove())
+        update.message.reply_text('Search cancelled.', reply_markup=ReplyKeyboardMarkup([['Search again']], one_time_keyboard=True))
         return ConversationHandler.END
 
     if user_choice in ['Date', 'Both']:
@@ -75,17 +77,20 @@ def date_choice(update, context):
                                   reply_markup=ReplyKeyboardRemove())
         return KEYWORDS
 
+    update.message.reply_text('Now we are ready to start searching!', reply_markup=ReplyKeyboardMarkup([['Search', 'Cancel']], one_time_keyboard=True))
+
     return SEARCH
 
 # Функция для обработки ключевых слов
 def keywords_choice(update, context):
-    keywords = update.message.text.replace(' ', '').split(',')
+    keywords = [word.strip() for word in update.message.text.split(',')]
 
     if len(keywords) == 0:
         update.message.reply_text('Invalid keywords format. Please enter the keywords separated by commas:',    reply_markup=ReplyKeyboardMarkup([['Cancel']], one_time_keyboard=True))
         return KEYWORDS
 
     context.user_data['keywords'] = keywords
+    update.message.reply_text('Now we are ready to start searching!', reply_markup=ReplyKeyboardMarkup([['Search', 'Cancel']], one_time_keyboard=True))
         
     return SEARCH
 
@@ -146,15 +151,23 @@ def start_search_main(update, context):
 
 # Функция для запуска поиска
 def start_search(update, context):
-    try:
-        start_search_main(update, context)
-    finally:
+    user_choice = update.message.text
+
+    if user_choice == 'Cancel':
+        update.message.reply_text('Search cancelled.', reply_markup=ReplyKeyboardMarkup([['Search again']], one_time_keyboard=True))
         return ConversationHandler.END
+
+    if user_choice == 'Search':
+        try:
+            start_search_main(update, context)
+        finally:
+            update.message.reply_text('Do you want to search again?', reply_markup=ReplyKeyboardMarkup([['Search again']], one_time_keyboard=True))
+            return ConversationHandler.END
 
 # Функция для команды /cancel
 def cancel(update, context):
     try:
-        update.message.reply_text('Search cancelled.', reply_markup=ReplyKeyboardRemove())
+        update.message.reply_text('Search cancelled.', reply_markup=ReplyKeyboardMarkup([['Search again']], one_time_keyboard=True))
     finally:
         return ConversationHandler.END
 
@@ -168,7 +181,10 @@ def main():
 
     # Настройка разговора с состояниями INIT, DATE, KEYWORDS и SEARCH
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[
+            CommandHandler('start', start),
+            MessageHandler(Filters.regex('^Search again$'), start)
+        ],
         states={
             INIT: [MessageHandler(Filters.regex('^(Date|Keywords|Both|Cancel)$'), init)],
             DATE: [MessageHandler(Filters.text & ~Filters.command, date_choice)],
